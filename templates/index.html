@@ -1,0 +1,40 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ActionPilot</title><style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#161a2b;--mut:#667;--ac:#5b5bf0;--bd:#e3e5ef}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1220;--card:#181c30;--tx:#eceefa;--mut:#9aa1c0;--bd:#2a3050}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+main{max-width:980px;margin:0 auto;padding:24px 16px}h1{margin:0}h1 span{color:var(--ac)}p.sub{color:var(--mut);margin-top:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+textarea{width:100%;min-height:300px;border:1px solid var(--bd);border-radius:10px;padding:12px;background:transparent;color:var(--tx);font:14px/1.5 ui-monospace,monospace;resize:vertical}
+button{border:0;border-radius:9px;padding:9px 14px;font-weight:600;cursor:pointer;background:var(--ac);color:#fff}button.g{background:transparent;color:var(--ac);border:1px solid var(--bd)}button:disabled{opacity:.5}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}label{color:var(--mut);font-size:14px}
+.item{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:8px}.meta{font-size:13px;color:var(--mut);display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+.pill{border-radius:99px;padding:1px 9px;font-size:12px;font-weight:700}.high{background:#fde2e2;color:#b42318}.medium{background:#fff1d6;color:#9a6700}.low{background:#dff5e6;color:#1a7f37}
+.badge{font-size:12px;font-weight:700;border-radius:6px;padding:2px 8px}.ai{background:#e5e5ff;color:#3b3bd0}.rules{background:#e8eef5;color:#33506f}
+.msg{padding:10px 12px;border-radius:10px;margin-bottom:10px;font-size:14px}.err{background:#fde2e2;color:#8a1c12}.warn{background:#fff1d6;color:#7a5200}
+.warnp{background:#fff1d6;color:#9a6700}.ctx{font-size:12px;color:var(--mut);margin-top:6px;border-left:3px solid var(--bd);padding-left:8px}.empty{color:var(--mut);text-align:center;padding:40px 0}</style></head><body><main>
+<h1>Action<span>Pilot</span></h1><p class="sub">Paste messy meeting notes. Get a clean, validated action list.</p>
+<div class="grid"><section class="card"><textarea id="t" placeholder="Paste meeting notes here..."></textarea>
+<div class="row"><button id="go">Extract actions</button><button class="g" id="sm">Load sample</button>
+<label><input type="checkbox" id="ai" {% if ai %}checked{% endif %} {% if not ai %}disabled{% endif %}> Use AI {% if not ai %}(set ANTHROPIC_API_KEY to enable){% endif %}</label></div></section>
+<section class="card"><div id="out"><div class="empty">Your action items will appear here.</div></div>
+<div class="row" id="ex" hidden><button class="g" id="csv">Download CSV</button><button class="g" id="md">Copy Markdown</button></div></section></div></main>
+<script>
+const $=i=>document.getElementById(i);let items=[];
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e};
+function show(n){$('out').replaceChildren(n)}
+$('sm').onclick=async()=>{$('t').value=(await (await fetch('/api/sample')).json()).text};
+$('go').onclick=async()=>{const b=$('go');b.disabled=true;b.textContent='Extracting...';show(el('div','empty','Working...'));$('ex').hidden=true;
+ try{const r=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:$('t').value,use_ai:$('ai').checked})});
+  const d=await r.json();if(!r.ok)return show(el('div','msg err',d.error||'Something went wrong.'));
+  items=d.items;const box=el('div');const h=el('div','row');h.append(el('span','badge '+d.source,d.source==='ai'?'AI-generated (validated)':'Rules-based (no AI)'),el('span','',items.length+' action items'),el('span','','Knowledge base: '+d.kb_chunks+' chunks'));box.append(h);
+  if(d.warning)box.append(el('div','msg warn',d.warning));
+  items.forEach(i=>{const c=el('div','item');c.append(el('div','',i.task));const m=el('div','meta');m.append(el('span','pill '+i.priority,i.priority),el('span','','Owner: '+i.owner),el('span','','Due: '+(i.deadline||'—')));if(i.possible_duplicate)m.append(el('span','pill warnp','matches an open past item'));
+   if(i.suggested_owner)m.append(el('span','','Suggested owner: '+i.suggested_owner+' (from roster)'));c.append(m);
+   if(i.related&&i.related.length)c.append(el('div','ctx','Retrieved from '+i.related[0].source+': '+i.related[0].snippet));box.append(c)});
+  show(box);$('ex').hidden=false}catch(e){show(el('div','msg err','Could not reach the server. Is it running?'))}finally{b.disabled=false;b.textContent='Extract actions'}};
+$('csv').onclick=()=>{const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';const rows=[['task','owner','deadline','priority'],...items.map(i=>[i.task,i.owner,i.deadline,i.priority])];
+ const a=el('a');a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}));a.download='action_items.csv';a.click()};
+$('md').onclick=async()=>{await navigator.clipboard.writeText(items.map(i=>`- [ ] **${i.owner}**: ${i.task} (due ${i.deadline||'n/a'}, ${i.priority})`).join('\n'));$('md').textContent='Copied!'};
+</script></body></html>

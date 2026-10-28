@@ -1,0 +1,11 @@
+Weekly Product Sync - Launch Prep
+Attendees: Priya, Marco, Dana, Leo
+
+We reviewed the beta feedback. Overall sentiment is positive.
+- Priya will send the updated pricing deck to finance by Friday.
+- Marco needs to fix the login bug ASAP, it's a blocker for launch.
+Action: Dana - book the demo room for Oct 30
+@leo draft the release notes tomorrow
+Someone should look at the analytics dashboard when possible.
+TODO: Update the onboarding checklist (low priority)
+The next sync is on Tuesday.
